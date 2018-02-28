@@ -4,6 +4,7 @@
 import * as vscode from 'vscode';
 import { ExternalAPI, ICodeDeployer } from './externalapi';
 import * as child_process from 'child_process';
+import { DebugCommands, startDebugging } from './debug';
 
 interface OutputPair {
     stdout: string;
@@ -93,6 +94,17 @@ export async function activate(context: vscode.ExtensionContext) {
             let command = 'deploy --offline -PdebugMode -PteamNumber=' + teamNumber;
             gradleChannel.show();
             let result = await gradleRun(command, wp2, gradleChannel);
+
+            let config: DebugCommands = {
+                serverAddress: '172.22.11.2',
+                serverPort: '6667',
+                gdbPath: 'c:/frc/bin/arm-linux-gnueabi-gdb.exe',
+                executablePath: '${workspaceRoot}/build/exe/frcUserProgram',
+                cwd: '${workspaceRoot}',
+            };
+
+            await startDebugging(config);
+
             console.log(result);
             return true;
         },
