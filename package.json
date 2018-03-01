@@ -13,6 +13,15 @@
     "activationEvents": [
         "workspaceContains:build.gradle"
     ],
+    "contributes": {
+        "commands":[
+            {
+                "title": "Refresh C++ Properties",
+                "command": "wpilibcpp.refreshProperties",
+                "category": "wpilib-cpp"
+            }
+        ]
+    },
     "main": "./out/extension",
     "scripts": {
         "vscode:prepublish": "npm run compile",

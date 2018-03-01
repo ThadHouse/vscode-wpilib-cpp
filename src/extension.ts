@@ -4,7 +4,47 @@
 import * as vscode from 'vscode';
 import { IExternalAPI } from './externalapi';
 import { DebugCommands, startDebugging } from './debug';
-import { gradleRun } from './gradle';
+import { gradleRun, OutputPair } from './gradle';
+import * as path from 'path';
+
+interface DebuggerParse {
+    libraryLocations: string[];
+    compilerLocation: string;
+    executablePath: string;
+    port: string;
+    ip: string;
+}
+
+function parseGradleOutput(output: OutputPair): DebuggerParse {
+    let ret: DebuggerParse = {
+        libraryLocations: new Array<string>(),
+        compilerLocation: '',
+        executablePath: '',
+        port: '',
+        ip: ''
+    };
+
+    let results = output.stdout.split('\n');
+    for(let r of results) {
+        if (r.indexOf('WPILIBRARY: ') >= 0) {
+            ret.libraryLocations.push(r.substring(12).trim());
+        }
+        if (r.indexOf('WPICOMPILER: ') >= 0) {
+            ret.compilerLocation = r.substring(12).trim();
+        }
+        if (r.indexOf('WPIEXECUTABLE: ') >= 0) {
+            ret.executablePath = r.substring(15).trim();
+        }
+        if (r.indexOf('DEBUGGING ACTIVE ON PORT ') >= 0) {
+            ret.port = r.substring(27, r.indexOf('!')).trim();
+        }
+        if (r.indexOf('Using address ') >= 0) {
+            ret.ip = r.substring(14, r.indexOf(' for')).trim();
+        }
+    }
+
+    return ret;
+}
 
 
 
@@ -89,7 +129,7 @@ export async function activate(_: vscode.ExtensionContext) {
             return true;
         },
         async runDeployer(teamNumber: number): Promise<boolean> {
-            let command = 'deploy --offline -PdebugMode -PteamNumber=' + teamNumber;
+            let command = 'deploy getLibraries getCompiler getExecutable --offline -PdebugMode -PteamNumber=' + teamNumber;
             gradleChannel.show();
             let workspace = await getWorkSpace();
             if (workspace === undefined) {
@@ -98,12 +138,23 @@ export async function activate(_: vscode.ExtensionContext) {
             }
             let result = await gradleRun(command, workspace.uri.fsPath, gradleChannel);
 
+            let parsed = parseGradleOutput(result);
+
+            let soPath = '';
+
+            for (let p of parsed.libraryLocations) {
+                soPath += path.dirname(p) + ';';
+            }
+
+            soPath = soPath.substring(0, soPath.length - 1);
+
             let config: DebugCommands = {
-                serverAddress: '172.22.11.2',
-                serverPort: '6667',
-                gdbPath: 'c:/frc/bin/arm-linux-gnueabi-gdb.exe',
-                executablePath: '${workspaceRoot}/build/exe/frcUserProgram',
-                workspace: workspace
+                serverAddress: parsed.ip,
+                serverPort: parsed.port,
+                gdbPath: path.join(parsed.compilerLocation, 'arm-frc-linux-gnueabi-gdb.exe'),
+                executablePath: parsed.executablePath,
+                workspace: workspace,
+                soLibPath: soPath
             };
 
             await startDebugging(config);

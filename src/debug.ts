@@ -7,6 +7,7 @@ export interface DebugCommands {
   gdbPath: string;
   executablePath: string;
   workspace: vscode.WorkspaceFolder;
+  soLibPath: string;
 }
 
 export async function startDebugging(commands: DebugCommands): Promise<void> {
@@ -24,8 +25,17 @@ export async function startDebugging(commands: DebugCommands): Promise<void> {
           description: 'Enable pretty-printing for gdb',
           text: 'enable-pretty-printing',
           ignoreFailures: true
+      },
+      {
+        text: 'set gnutarget elf32-littlearm'
+
+      },
+      {
+        text: 'set sysroot "C:\\Users\\thadh\\.gradle\\gradlerio\\toolchains"'
       }
-    ]
+
+    ],
+    additionalSOLibSearchPath: commands.soLibPath
   };
 
   await vscode.debug.startDebugging(commands.workspace, config);
