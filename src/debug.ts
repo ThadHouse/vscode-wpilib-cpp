@@ -1,3 +1,4 @@
+'use strict';
 import * as vscode from 'vscode';
 
 export interface DebugCommands {
@@ -5,18 +6,18 @@ export interface DebugCommands {
   serverPort: string;
   gdbPath: string;
   executablePath: string;
-  cwd: string;
+  workspace: vscode.WorkspaceFolder;
 }
 
 export async function startDebugging(commands: DebugCommands): Promise<void> {
   let config: vscode.DebugConfiguration = {
-    name: 'wpilibDebug',
+    name: 'wpilibCppDebug',
     type: 'cppdbg',
     request: 'launch',
     miDebuggerServerAddress: commands.serverAddress + ':' + commands.serverPort,
     miDebuggerPath: commands.gdbPath,
     program: commands.executablePath,
-    cwd: commands.cwd,
+    cwd: commands.workspace.uri.fsPath,
     MIMode: 'gdb',
     setupCommands: [
       {
@@ -27,5 +28,5 @@ export async function startDebugging(commands: DebugCommands): Promise<void> {
     ]
   };
 
-  await vscode.debug.startDebugging(undefined, config);
+  await vscode.debug.startDebugging(commands.workspace, config);
 }
