@@ -86,31 +86,18 @@ export async function activate(_: vscode.ExtensionContext) {
 
     let gradleChannel = vscode.window.createOutputChannel('gradleCpp');
 
-    let wp = vscode.workspace.workspaceFolders;
-
-    if (wp === undefined) {
-        vscode.window.showErrorMessage('File mode is not supported');
-        return;
-    }
-
-    let workspaces : vscode.WorkspaceFolder[] = wp;
-
-    let getWorkSpace = async (): Promise<vscode.WorkspaceFolder | undefined> => {
-        if (workspaces.length === 1) {
-            return workspaces[0];
-        }
-        return await vscode.window.showWorkspaceFolderPick();
-        //return workspaces[0];
-    };
+    coreExports.addLanguageChoice('cpp');
 
     coreExports.registerCodeDeploy({
-        async getIsCurrentlyValid(): Promise<boolean> {
-            return true;
+        async getIsCurrentlyValid(workspace: vscode.WorkspaceFolder): Promise<boolean> {
+            let prefs = await coreExports.getPreferences(workspace);
+            let currentLanguage = prefs.getCurrentLanguage();
+            return currentLanguage === 'none' || currentLanguage === 'cpp';
         },
-        async runDeployer(teamNumber: number): Promise<boolean> {
+        async runDeployer(teamNumber: number, workspace: vscode.WorkspaceFolder): Promise<boolean> {
             let command = 'deploy --offline -PteamNumber=' + teamNumber;
+            gradleChannel.clear();
             gradleChannel.show();
-            let workspace = await getWorkSpace();
             if (workspace === undefined) {
                 vscode.window.showInformationMessage('No workspace selected');
                 return false;
@@ -125,13 +112,15 @@ export async function activate(_: vscode.ExtensionContext) {
     });
 
     coreExports.registerCodeDebug({
-        async getIsCurrentlyValid(): Promise<boolean> {
-            return true;
+        async getIsCurrentlyValid(workspace: vscode.WorkspaceFolder): Promise<boolean> {
+            let prefs = await coreExports.getPreferences(workspace);
+            let currentLanguage = prefs.getCurrentLanguage();
+            return currentLanguage === 'none' || currentLanguage === 'cpp';
         },
-        async runDeployer(teamNumber: number): Promise<boolean> {
+        async runDeployer(teamNumber: number, workspace: vscode.WorkspaceFolder): Promise<boolean> {
             let command = 'deploy getLibraries getCompiler getExecutable --offline -PdebugMode -PteamNumber=' + teamNumber;
+            gradleChannel.clear();
             gradleChannel.show();
-            let workspace = await getWorkSpace();
             if (workspace === undefined) {
                 vscode.window.showInformationMessage('No workspace selected');
                 return false;
