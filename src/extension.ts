@@ -9,7 +9,7 @@ import * as path from 'path';
 
 interface DebuggerParse {
     libraryLocations: string[];
-    compilerLocation: string;
+    sysroot: string;
     executablePath: string;
     port: string;
     ip: string;
@@ -18,7 +18,7 @@ interface DebuggerParse {
 function parseGradleOutput(output: OutputPair): DebuggerParse {
     let ret: DebuggerParse = {
         libraryLocations: new Array<string>(),
-        compilerLocation: '',
+        sysroot: '',
         executablePath: '',
         port: '',
         ip: ''
@@ -30,7 +30,7 @@ function parseGradleOutput(output: OutputPair): DebuggerParse {
             ret.libraryLocations.push(r.substring(12).trim());
         }
         if (r.indexOf('WPICOMPILER: ') >= 0) {
-            ret.compilerLocation = r.substring(12).trim();
+            ret.sysroot = r.substring(12).trim();
         }
         if (r.indexOf('WPIEXECUTABLE: ') >= 0) {
             ret.executablePath = r.substring(15).trim();
@@ -62,15 +62,15 @@ export async function activate(_: vscode.ExtensionContext) {
         return;
     }
 
-    let cppExtension = vscode.extensions.getExtension('ms-vscode.cpptools');
-    if (cppExtension === undefined) {
-        vscode.window.showErrorMessage('Could not find cpp extension');
-        return;
-    }
+    let allowDebug = true;
 
     let promises = new Array<Thenable<any>>();
 
-    if (!cppExtension.isActive) {
+    let cppExtension = vscode.extensions.getExtension('ms-vscode.cpptools');
+    if (cppExtension === undefined) {
+        vscode.window.showInformationMessage('Could not find cpptools C++ extension. Debugging is disabled.');
+        allowDebug =  false;
+    } else if (!cppExtension.isActive) {
         promises.push(cppExtension.activate());
     }
 
@@ -111,50 +111,52 @@ export async function activate(_: vscode.ExtensionContext) {
         }
     });
 
-    coreExports.registerCodeDebug({
-        async getIsCurrentlyValid(workspace: vscode.WorkspaceFolder): Promise<boolean> {
-            let prefs = await coreExports.getPreferences(workspace);
-            let currentLanguage = prefs.getCurrentLanguage();
-            return currentLanguage === 'none' || currentLanguage === 'cpp';
-        },
-        async runDeployer(teamNumber: number, workspace: vscode.WorkspaceFolder): Promise<boolean> {
-            let command = 'deploy getLibraries getCompiler getExecutable --offline -PdebugMode -PteamNumber=' + teamNumber;
-            gradleChannel.clear();
-            gradleChannel.show();
-            if (workspace === undefined) {
-                vscode.window.showInformationMessage('No workspace selected');
-                return false;
+    if (allowDebug) {
+        coreExports.registerCodeDebug({
+            async getIsCurrentlyValid(workspace: vscode.WorkspaceFolder): Promise<boolean> {
+                let prefs = await coreExports.getPreferences(workspace);
+                let currentLanguage = prefs.getCurrentLanguage();
+                return currentLanguage === 'none' || currentLanguage === 'cpp';
+            },
+            async runDeployer(teamNumber: number, workspace: vscode.WorkspaceFolder): Promise<boolean> {
+                let command = 'deploy getLibraries getCompiler getExecutable --offline -PdebugMode -PteamNumber=' + teamNumber;
+                gradleChannel.clear();
+                gradleChannel.show();
+                if (workspace === undefined) {
+                    vscode.window.showInformationMessage('No workspace selected');
+                    return false;
+                }
+                let result = await gradleRun(command, workspace.uri.fsPath, gradleChannel);
+
+                let parsed = parseGradleOutput(result);
+
+                let soPath = '';
+
+                for (let p of parsed.libraryLocations) {
+                    soPath += path.dirname(p) + ';';
+                }
+
+                soPath = soPath.substring(0, soPath.length - 1);
+
+                let config: DebugCommands = {
+                    serverAddress: parsed.ip,
+                    serverPort: parsed.port,
+                    sysroot: parsed.sysroot,
+                    executablePath: parsed.executablePath,
+                    workspace: workspace,
+                    soLibPath: soPath
+                };
+
+                await startDebugging(config);
+
+                console.log(result);
+                return true;
+            },
+            getDisplayName(): string {
+                return 'cpp';
             }
-            let result = await gradleRun(command, workspace.uri.fsPath, gradleChannel);
-
-            let parsed = parseGradleOutput(result);
-
-            let soPath = '';
-
-            for (let p of parsed.libraryLocations) {
-                soPath += path.dirname(p) + ';';
-            }
-
-            soPath = soPath.substring(0, soPath.length - 1);
-
-            let config: DebugCommands = {
-                serverAddress: parsed.ip,
-                serverPort: parsed.port,
-                gdbPath: path.join(parsed.compilerLocation, 'arm-frc-linux-gnueabi-gdb.exe'),
-                executablePath: parsed.executablePath,
-                workspace: workspace,
-                soLibPath: soPath
-            };
-
-            await startDebugging(config);
-
-            console.log(result);
-            return true;
-        },
-        getDisplayName(): string {
-            return 'cpp';
-        }
-    });
+        });
+    }
 }
 
 // this method is called when your extension is deactivated

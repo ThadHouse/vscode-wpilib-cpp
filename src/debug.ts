@@ -1,10 +1,11 @@
 'use strict';
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 export interface DebugCommands {
   serverAddress: string;
   serverPort: string;
-  gdbPath: string;
+  sysroot: string;
   executablePath: string;
   workspace: vscode.WorkspaceFolder;
   soLibPath: string;
@@ -16,9 +17,10 @@ export async function startDebugging(commands: DebugCommands): Promise<void> {
     type: 'cppdbg',
     request: 'launch',
     miDebuggerServerAddress: commands.serverAddress + ':' + commands.serverPort,
-    miDebuggerPath: commands.gdbPath,
+    miDebuggerPath: path.join(commands.sysroot, 'bin/arm-frc-linux-gnueabi-gdb'),
     program: commands.executablePath,
     cwd: commands.workspace.uri.fsPath,
+    externalConsole: true,
     MIMode: 'gdb',
     setupCommands: [
       {
@@ -27,16 +29,16 @@ export async function startDebugging(commands: DebugCommands): Promise<void> {
           ignoreFailures: true
       },
       {
-        text: 'set gnutarget elf32-littlearm'
-
-      },
-      {
-        text: 'set sysroot "C:\\Users\\thadh\\.gradle\\gradlerio\\toolchains"'
+        text: 'set sysroot ' + commands.sysroot
       }
-
     ],
-    additionalSOLibSearchPath: commands.soLibPath
+    additionalSOLibSearchPath: commands.soLibPath,
   };
+
+  let nodePlatform: NodeJS.Platform = process.platform;
+  if (nodePlatform === 'win32') {
+    config.miDebuggerPath += '.exe';
+  }
 
   await vscode.debug.startDebugging(commands.workspace, config);
 }
